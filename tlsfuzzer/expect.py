@@ -5,7 +5,7 @@
 
 from tlslite.constants import ContentType, HandshakeType, CertificateType,\
         HashAlgorithm, SignatureAlgorithm, ExtensionType,\
-        SSL2HandshakeType, CipherSuite, GroupName
+        SSL2HandshakeType, CipherSuite, GroupName, AlertDescription
 from tlslite.messages import ServerHello, Certificate, ServerHelloDone,\
         ChangeCipherSpec, Finished, Alert, CertificateRequest, ServerHello2,\
         ServerKeyExchange, ClientHello, ServerFinished
@@ -528,8 +528,11 @@ class ExpectAlert(Expect):
                 and alert.description != self.description:
             if problem_desc:
                 problem_desc += ", "
-            problem_desc += ("Alert description {0} != {1}"
-                             .format(alert.description, self.description))
+            expected = AlertDescription.toStr(self.description)
+            received = AlertDescription.toStr(alert.description)
+            problem_desc += ("Expected alert description \"{0}\" does not "
+                             "match received \"{1}\""
+                             .format(expected, received))
         if problem_desc:
             raise AssertionError(problem_desc)
 
