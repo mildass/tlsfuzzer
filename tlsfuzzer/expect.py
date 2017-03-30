@@ -5,10 +5,11 @@
 
 from tlslite.constants import ContentType, HandshakeType, CertificateType,\
         HashAlgorithm, SignatureAlgorithm, ExtensionType,\
-        SSL2HandshakeType, CipherSuite, GroupName
+        SSL2HandshakeType, CipherSuite, GroupName, HeartbeatMode
 from tlslite.messages import ServerHello, Certificate, ServerHelloDone,\
         ChangeCipherSpec, Finished, Alert, CertificateRequest, ServerHello2,\
-        ServerKeyExchange, ClientHello, ServerFinished, CertificateStatus
+        ServerKeyExchange, ClientHello, ServerFinished, CertificateStatus, \
+        Heartbeat
 from tlslite.utils.codec import Parser
 from tlslite.mathtls import calcFinished, RFC7919_GROUPS
 from .handshake_helpers import calc_pending_states
@@ -179,6 +180,9 @@ class ExpectServerHello(ExpectHandshake):
                     self.extensions[ext_id](state, ext)
                 if ext_id == ExtensionType.extended_master_secret:
                     state.extended_master_secret = True
+                if ext_id == ExtensionType.heartbeat:
+                    if ext.mode != HeartbeatMode.peer_allowed_to_send:
+                        raise AssertionError("unexpected Heartbeat mode")
             # not supporting any extensions is valid
             if srv_hello.extensions is not None:
                 for ext_id in (ext.extType for ext in srv_hello.extensions):
@@ -607,3 +611,19 @@ class ExpectCertificateStatus(ExpectHandshake):
 
         state.handshake_messages.append(cert_status)
         state.handshake_hashes.update(msg.write())
+
+
+class ExpectHeartbeatResponse(Expect):
+    """Processing heartbeat response."""
+    def __init__(self, payload=None):
+        super(ExpectHeartbeatResponse, self).__init__(ContentType.heartbeat)
+        self.payload = payload
+
+    def process(self, state, msg):
+        assert msg.contentType == ContentType.heartbeat
+        parser = Parser(msg.write())
+        heartbeat_response = Heartbeat()
+        heartbeat_response.parse(parser)
+
+        if self.payload:
+            assert self.payload == heartbeat_response.payload

@@ -6,11 +6,12 @@
 from tlslite.messages import ClientHello, ClientKeyExchange, ChangeCipherSpec,\
         Finished, Alert, ApplicationData, Message, Certificate, \
         CertificateVerify, CertificateRequest, ClientMasterKey, \
-        ClientFinished, ServerKeyExchange
+        ClientFinished, ServerKeyExchange, Heartbeat
 from tlslite.constants import AlertLevel, AlertDescription, ContentType, \
         ExtensionType, CertificateType, ClientCertificateType, HashAlgorithm, \
-        SignatureAlgorithm, CipherSuite
-from tlslite.extensions import TLSExtension, RenegotiationInfoExtension
+        SignatureAlgorithm, CipherSuite, HeartbeatMessageType, HeartbeatMode
+from tlslite.extensions import TLSExtension, RenegotiationInfoExtension, \
+     HeartbeatExtension
 from tlslite.messagesocket import MessageSocket
 from tlslite.defragmenter import Defragmenter
 from tlslite.mathtls import calcMasterSecret, calcFinished, \
@@ -314,6 +315,10 @@ class ClientHelloGenerator(HandshakeProtocolMessageGenerator):
             if ext_id == ExtensionType.renegotiation_info:
                 ext = RenegotiationInfoExtension()\
                         .create(state.client_verify_data)
+                extensions.append(ext)
+            elif ext_id == ExtensionType.heartbeat:
+                ext = HeartbeatExtension().create(
+                    HeartbeatMode.peer_allowed_to_send)
                 extensions.append(ext)
             else:
                 extensions.append(TLSExtension().create(ext_id, bytearray(0)))
@@ -747,6 +752,29 @@ class ApplicationDataGenerator(MessageGenerator):
         """Send data to server in Application Data messages."""
         app_data = ApplicationData().create(self.payload)
         return app_data
+
+
+class HeartbeatGenerator(MessageGenerator):
+    """Generator for Heartbeat message request."""
+
+    def __init__(self, payload, type=HeartbeatMessageType.heartbeat_request,
+                 padding=None, padding_length=16):
+        """Save the payload to send to server."""
+        super(HeartbeatGenerator, self).__init__()
+        self.type = type
+        self.payload = payload
+        self.padding = padding
+        self.padding_length = padding_length
+
+    def generate(self, status):
+        """Send heartbeat request to server."""
+        heartbeat_message = Heartbeat().create(
+            self.type, self.payload, self.padding_length)
+
+        if self.padding:
+            heartbeat_message.padding = self.padding
+
+        return heartbeat_message
 
 
 def pad_handshake(generator, size=0, pad_byte=0, pad=None):
